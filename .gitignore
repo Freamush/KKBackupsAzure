@@ -1,0 +1,27 @@
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+*.tfplan
+tfplan
+
+# Секреты/переменные
+*.tfvars
+*.tfvars.json
+!example.tfvars
+
+# Локальные оверрайды и CLI-конфиг
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Прочее
+.env
+.DS_Store
+.vscode/
+.idea/

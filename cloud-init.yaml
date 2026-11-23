@@ -1,0 +1,49 @@
+#cloud-config
+package_update: true
+package_upgrade: true
+packages:
+  - nftables
+  - unattended-upgrades
+
+write_files:
+  - path: /etc/sysctl.d/99-forwarding.conf
+    content: |
+      net.ipv4.ip_forward = 1
+      net.ipv6.conf.all.forwarding = 1
+
+  # Own tables only, no "flush ruleset": tailscaled adds its own rules and must keep them.
+  - path: /etc/nftables.conf
+    permissions: "0644"
+    content: |
+      #!/usr/sbin/nft -f
+      table inet kk_filter
+      delete table inet kk_filter
+
+      table inet kk_filter {
+        chain input {
+          type filter hook input priority 0; policy drop;
+          iif "lo" accept
+          ct state established,related accept
+          ct state invalid drop
+          meta l4proto icmp accept
+          udp dport 68 accept                  # DHCP lease renewals from Azure
+          udp dport 41641 accept               # Tailscale direct (WireGuard); NSG still blocks unsolicited Internet traffic
+          iifname "tailscale0" tcp dport 22 accept   # Tailscale SSH, only from the tailnet
+        }
+
+        chain forward {
+          type filter hook forward priority 0; policy drop;
+          ct state established,related accept
+          iifname "tailscale0" ip daddr ${pe_ip} tcp dport 443 accept
+        }
+
+        chain output {
+          type filter hook output priority 0; policy accept;
+        }
+      }
+
+runcmd:
+  - sysctl --system
+  - systemctl enable --now nftables
+  - curl -fsSL https://tailscale.com/install.sh | sh
+  - tailscale up --auth-key=${ts_authkey} --hostname=kk-azure-router --advertise-routes=${pe_ip}/32 --ssh
